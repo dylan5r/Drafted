@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Context>
+    <Resource
+        name="jdbc/fraggeddb"
+        auth="Container"
+        type="javax.sql.DataSource"
+        driverClassName="com.mysql.cj.jdbc.Driver"
+        factory="org.apache.tomcat.jdbc.pool.DataSourceFactory"
+        url="jdbc:mysql://localhost:3306/fragged?useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=UTC"
+        username="fragged_user"
+        password="fragged_password"
+        initialSize="5"
+        maxActive="25"
+        maxIdle="10"
+        minIdle="5"
+        maxWait="10000"
+        testOnBorrow="true"
+        validationQuery="SELECT 1"
+        validationInterval="30000"
+        removeAbandoned="true"
+        removeAbandonedTimeout="60"
+        logAbandoned="true"
+        jmxEnabled="true"/>
+</Context>
