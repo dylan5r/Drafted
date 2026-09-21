@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:engine": "node --experimental-strip-types --test \"src/twok27/engine/__tests__/*.test.ts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "framer-motion": "^11.3.19",
@@ -15,6 +17,7 @@
     "react-router-dom": "^6.26.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

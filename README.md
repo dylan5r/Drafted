@@ -32,3 +32,22 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## NBA 2K27 MyPLAYER build lab
+
+A live build creator at `/2k27`: pick a body, drag 21 attribute sliders, and
+watch ceilings, overall rating, badges, badge tokens and cap-breaker
+projections update as you go.
+
+The engine (`frontend/src/twok27/engine/`) is pure TypeScript with no
+dependencies and runs entirely in the browser. It is verified against the
+game's own measurements — 256/256 overall-rating vectors, 21/21 attribute
+ceilings, and 2,123/2,123 badge-slot totals.
+
+- Rules and provenance: [`docs/nba2k27/RESEARCH.md`](docs/nba2k27/RESEARCH.md)
+- Recompile the data tables: `python3 tools/nba2k27/extract_data.py --dataset <clone>`
+- Engine tests: `cd frontend && npm run test:engine`
+
+Measurements by [lightmatmul/nba2k27-builder-dataset](https://github.com/lightmatmul/nba2k27-builder-dataset),
+cross-checked against [sondberg84/nba2k27-build-lab](https://github.com/sondberg84/nba2k27-build-lab).
+Not affiliated with 2K Sports, Visual Concepts or Take-Two Interactive.

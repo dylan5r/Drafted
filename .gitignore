@@ -1,0 +1,19 @@
+# Node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# tsc -b emits these next to the config it builds
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# Java build output
+build/
+target/
+*.class
+WebContent/WEB-INF/lib/*.jar
+
+# Local tooling
+.env
+.env.local
+.DS_Store
