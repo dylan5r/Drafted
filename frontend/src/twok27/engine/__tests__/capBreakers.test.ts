@@ -12,6 +12,7 @@ import {
   project,
   projectRange,
 } from '../capBreakers.ts';
+import { ceilingFor } from '../ceilings.ts';
 import { loadRules } from './support.ts';
 
 const rules = loadRules();
@@ -111,5 +112,51 @@ describe('cap breakers', () => {
       threePoint > freeThrow,
       `three point (${threePoint}) should be more scenario-sensitive than free throw (${freeThrow})`,
     );
+  });
+});
+
+describe('the ladder reading', () => {
+  // This is the bug that shipped first: walking the table by advancing the
+  // application index AND re-reading at each new rating double-counts the
+  // diminishing returns. It understated driving dunk 70 as 85 when the real
+  // answer is 94. These tests lock the correct reading in.
+  const DD = indexOf('driving_dunk');
+
+  it('reaches the figure players actually report from a 70 driving dunk', () => {
+    assert.equal(project(rules, 'near_caps', DD, 70).rating, 94);
+  });
+
+  it('spends all five breakers rather than stalling below the ceiling', () => {
+    let stalled = 0;
+    for (const scenario of ['isolated', 'near_caps'] as const) {
+      for (let attribute = 0; attribute < 21; attribute += 1) {
+        for (let rating = 25; rating <= 99; rating += 1) {
+          const result = project(rules, scenario, attribute, rating);
+          if (result.applied === 0) continue;
+          if (result.applied < MAX_APPLICATIONS && result.rating < 99) stalled += 1;
+        }
+      }
+    }
+    assert.equal(stalled, 0, `${stalled} sequences left breakers unspent`);
+  });
+
+  it('never carries an attribute past the body ceiling it was measured at', () => {
+    const reference = {
+      position: 'PG' as const,
+      height: rules.capBreakers.referenceBody.height_inches,
+      weight: rules.capBreakers.referenceBody.weight_lb,
+      wingspan: rules.capBreakers.referenceBody.wingspan_inches,
+    };
+    for (let attribute = 0; attribute < 21; attribute += 1) {
+      const ceiling = ceilingFor(rules, reference, attribute);
+      if (ceiling === null) continue;
+      for (let rating = 25; rating <= ceiling; rating += 1) {
+        const result = project(rules, 'isolated', attribute, rating);
+        assert.ok(
+          result.rating <= ceiling,
+          `${rules.attributes[attribute].name} ${rating} -> ${result.rating} past ${ceiling}`,
+        );
+      }
+    }
   });
 });

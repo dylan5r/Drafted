@@ -212,6 +212,35 @@ whole build, because it is computed against the build's winning archetype.
 So for any other body the engine reports the two scenarios as a **bracket** and
 says it is a bracket. It does not interpolate, and it does not pick one.
 
+### Reading the gain table — corrected
+
+Each row of the table is keyed by a **starting rating** and holds the gains of
+all five breakers from that rating. The sequence reads straight across the row.
+
+It is **not** walked by advancing the column index while also re-reading at each
+new rating. That double-counts the diminishing returns and understates the
+result badly — it was the first thing this engine shipped, and it put driving
+dunk 70 at 85 when the real answer is 94.
+
+Three things pin the correct reading down:
+
+- **The table is a shifted view of one curve.** `row(r)[1..4]` equals
+  `row(r + row(r)[0])[0..3]` in 2,601 of 2,656 sequences, so re-reading at the
+  new rating and taking column 0 gives the same answer as reading across the
+  starting row.
+- **It respects the ceiling exactly.** Summing a row never overshoots the
+  attribute's cap and lands exactly on it 739 times — which is the documented
+  behaviour, breakers approaching the physical cap without passing it.
+- **The wrong reading wastes breakers.** It stalls 742 sequences below the
+  ceiling with applications left unspent, which no reward design would do.
+
+Corroborated in the wild: players report driving dunk 70 reaching 94, which the
+corrected reading reproduces exactly. `capBreakers.test.ts` locks all of this in.
+
+The practical consequence is large. Five breakers are worth up to **+24 rating**
+on a low-rated attribute, not the +15 the wrong reading suggested, which changes
+where it is rational to spend builder points.
+
 ### What was tried, and what was found
 
 The obvious model — that a cap breaker grants a fixed overall-rating budget

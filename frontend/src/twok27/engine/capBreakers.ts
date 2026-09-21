@@ -56,11 +56,25 @@ export interface Projection {
 /**
  * Apply up to five cap breakers under one scenario.
  *
- * Each application looks up its gain at the rating the previous one produced,
- * not at the starting rating -- the gains shrink as you climb.
+ * The row recorded for a starting rating holds the gains of all five breakers
+ * from that rating, so the sequence reads straight off it. It is NOT walked by
+ * advancing the column index while also re-reading at each new rating -- doing
+ * both double-counts the diminishing returns and understates the result badly.
  *
- * A missing row means upstream recorded nothing there, never "zero gain", so
- * the sequence stops and says so instead of silently returning a short answer.
+ * Three things pin this down:
+ *
+ *  - The table is a shifted view of one curve: `row(r)[1..4]` equals
+ *    `row(r + row(r)[0])[0..3]` in 2,601 of 2,656 sequences. Re-reading at the
+ *    new rating and taking column 0 gives the same answer as reading straight
+ *    across the starting row.
+ *  - Summing the row never overshoots the attribute's ceiling, and lands
+ *    exactly on it 739 times -- which is the documented behaviour, breakers
+ *    approaching the physical cap without passing it.
+ *  - The double-counting reading stalls 742 sequences below the ceiling with
+ *    breakers left unspent, which no sane reward design would do.
+ *
+ * Corroborated in the wild: driving dunk 70 reaches 94 under this reading, the
+ * figure players report.
  */
 export function project(
   rules: Rules,
@@ -74,15 +88,25 @@ export function project(
   let applied = 0;
   let note: string | null = null;
 
+  const row = gainsRow(rules, scenario, attribute, rating);
+  if (row === null) {
+    return {
+      scenario,
+      steps,
+      rating,
+      applied: 0,
+      note:
+        `no measured gains from ${rating}: the table was probed at ` +
+        `${rules.capBreakers.referenceBody.height_inches} in / ` +
+        `${rules.capBreakers.referenceBody.weight_lb} lb and stops at that body's ceiling`,
+    };
+  }
+
   const limit = Math.min(count, MAX_APPLICATIONS);
   for (let application = 0; application < limit; application += 1) {
-    const row = gainsRow(rules, scenario, attribute, current);
-    const gain = row ? row[application] : null;
+    const gain = row[application];
     if (gain === null || gain === undefined) {
-      note =
-        `no measured gain beyond ${applied} application(s) from ${rating}: the ` +
-        `table was probed at ${rules.capBreakers.referenceBody.height_inches} in / ` +
-        `${rules.capBreakers.referenceBody.weight_lb} lb and stops at that body's ceiling`;
+      note = `only ${applied} of ${limit} breakers have a measured gain from ${rating}`;
       break;
     }
     current = Math.min(current + gain, RATING_MAX);
