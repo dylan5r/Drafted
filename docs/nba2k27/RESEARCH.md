@@ -212,34 +212,48 @@ whole build, because it is computed against the build's winning archetype.
 So for any other body the engine reports the two scenarios as a **bracket** and
 says it is a bracket. It does not interpolate, and it does not pick one.
 
-### Reading the gain table — corrected
+### Reading the gain table
 
-Each row of the table is keyed by a **starting rating** and holds the gains of
-all five breakers from that rating. The sequence reads straight across the row.
+Each step re-reads the table at the rating it has reached, under the next
+application index. The gain depends on **both** how high the attribute already
+is and how many breakers it has already taken, which is exactly what the
+recorded fields say: `rating` is "the starting rating before this application",
+`application` is "which of the five breakers".
 
-It is **not** walked by advancing the column index while also re-reading at each
-new rating. That double-counts the diminishing returns and understates the
-result badly — it was the first thing this engine shipped, and it put driving
-dunk 70 at 85 when the real answer is 94.
+A consequence worth knowing: a sequence can run out of gain before all five
+land. At the reference body a driving dunk walked up from 70 reaches 85 and the
+last two breakers score zero. That looks wasteful, and it is tempting to read it
+as evidence the walk is wrong.
 
-Three things pin the correct reading down:
+**It is not, and this was got wrong once.** A rival reading — take the starting
+row and read straight across its five columns — predicts 94 for the same build,
+never overshoots a ceiling, lands exactly on one 739 times, and matches a
+widely repeated community claim that a 70 driving dunk "caps to 94". All of that
+is suggestive and all of it is beside the point:
 
-- **The table is a shifted view of one curve.** `row(r)[1..4]` equals
-  `row(r + row(r)[0])[0..3]` in 2,601 of 2,656 sequences, so re-reading at the
-  new rating and taking column 0 gives the same answer as reading across the
-  starting row.
-- **It respects the ceiling exactly.** Summing a row never overshoots the
-  attribute's cap and lands exactly on it 739 times — which is the documented
-  behaviour, breakers approaching the physical cap without passing it.
-- **The wrong reading wastes breakers.** It stalls 742 sequences below the
-  ceiling with applications left unspent, which no reward design would do.
+> A player set a 71 driving dunk in the retail builder and finished at **84**.
 
-Corroborated in the wild: players report driving dunk 70 reaching 94, which the
-corrected reading reproduces exactly. `capBreakers.test.ts` locks all of this in.
+This walk predicts 85 at the `near_caps` end and 76 at `isolated`; a real build
+sitting just under its ceilings landing on 84 is exactly right. The rival
+reading predicts 94 — ten points out.
 
-The practical consequence is large. Five breakers are worth up to **+24 rating**
-on a low-rated attribute, not the +15 the wrong reading suggested, which changes
-where it is rational to spend builder points.
+The lesson is procedural, not technical: the 739 exact ceiling landings are a
+property of the curve's shape, not evidence about how the engine walks it, and a
+community figure is not a measurement. One reading from the real builder settled
+what a lot of internal consistency could not. `capBreakers.test.ts` pins the
+observation.
+
+**Practical consequence.** Five breakers are worth roughly +14 on a
+low-seventies rating and one or two in the nineties. Driving dunk 94 needs a
+builder base around 91, not 70 — so the attribute has to be bought, not
+grown.
+
+### Ceilings, checked against the game
+
+One further reading from the retail builder: at 6'6" with a **6'9" wingspan**,
+block caps at 74. The ceiling formula gives exactly 74 there, and 76 at a 6'10"
+wingspan — so the formula holds, and a reported cap is a reliable way to infer
+which body a player is actually on.
 
 ### What was tried, and what was found
 

@@ -63,12 +63,21 @@ describe('cap breakers', () => {
   });
 
   it('stops and says so rather than inventing a gain it has no data for', () => {
-    // post_control tops out at 80 at the reference body, so a sequence starting
-    // near that ceiling must run out of table, not silently return zeros.
-    const result = project(rules, 'near_caps', indexOf('post_control'), 79);
-    if (result.applied < MAX_APPLICATIONS) {
-      assert.ok(result.note, 'a short sequence must explain itself');
-    }
+    // Past the reference body's ceiling there is no row at all. That is missing
+    // data, not a zero gain, and it has to be reported as such.
+    const result = project(rules, 'near_caps', indexOf('post_control'), 81);
+    assert.equal(result.applied, 0);
+    assert.ok(result.note, 'an unmeasured sequence must explain itself');
+    assert.match(result.note!, /probed at/);
+  });
+
+  it('a sequence that runs out of gain simply stops, with no note', () => {
+    // Distinct from the above: the table has rows, they just score zero once
+    // the attribute has taken enough breakers. Nothing is missing, so there is
+    // nothing to explain.
+    const result = project(rules, 'near_caps', indexOf('driving_dunk'), 70);
+    assert.ok(result.applied > 0 && result.applied < MAX_APPLICATIONS);
+    assert.equal(result.note, null);
   });
 
   it('reports a bracket, and says when it is only a bracket', () => {
@@ -116,28 +125,22 @@ describe('cap breakers', () => {
 });
 
 describe('the ladder reading', () => {
-  // This is the bug that shipped first: walking the table by advancing the
-  // application index AND re-reading at each new rating double-counts the
-  // diminishing returns. It understated driving dunk 70 as 85 when the real
-  // answer is 94. These tests lock the correct reading in.
   const DD = indexOf('driving_dunk');
 
-  it('reaches the figure players actually report from a 70 driving dunk', () => {
-    assert.equal(project(rules, 'near_caps', DD, 70).rating, 94);
+  it('matches the retail builder on the one build we have a reading from', () => {
+    // A 71 driving dunk finished at 84 in game. near_caps is the upper bound
+    // and lands at 85; a real build sits just under it. The reading that walks
+    // straight across the starting row predicts 94 and is wrong.
+    const high = project(rules, 'near_caps', DD, 71).rating;
+    const low = project(rules, 'isolated', DD, 71).rating;
+    assert.ok(low <= 84 && 84 <= high, `84 should sit in ${low}..${high}`);
+    assert.equal(high, 85, 'near_caps from 71 should be 85, not 94');
   });
 
-  it('spends all five breakers rather than stalling below the ceiling', () => {
-    let stalled = 0;
-    for (const scenario of ['isolated', 'near_caps'] as const) {
-      for (let attribute = 0; attribute < 21; attribute += 1) {
-        for (let rating = 25; rating <= 99; rating += 1) {
-          const result = project(rules, scenario, attribute, rating);
-          if (result.applied === 0) continue;
-          if (result.applied < MAX_APPLICATIONS && result.rating < 99) stalled += 1;
-        }
-      }
-    }
-    assert.equal(stalled, 0, `${stalled} sequences left breakers unspent`);
+  it('stops rather than applying a breaker the table scores at zero', () => {
+    const result = project(rules, 'near_caps', DD, 70);
+    assert.equal(result.rating, 85);
+    assert.ok(result.applied < MAX_APPLICATIONS, 'the last breakers score zero here');
   });
 
   it('never carries an attribute past the body ceiling it was measured at', () => {

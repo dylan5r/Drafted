@@ -56,25 +56,22 @@ export interface Projection {
 /**
  * Apply up to five cap breakers under one scenario.
  *
- * The row recorded for a starting rating holds the gains of all five breakers
- * from that rating, so the sequence reads straight off it. It is NOT walked by
- * advancing the column index while also re-reading at each new rating -- doing
- * both double-counts the diminishing returns and understates the result badly.
+ * The gain depends on BOTH the rating you are applying at and how many
+ * breakers that attribute has already taken, so each step re-reads the table
+ * at the new rating under the next application index. That is what the
+ * recorded fields say: `rating` is "the starting rating before this
+ * application" and `application` is "which of the five breakers".
  *
- * Three things pin this down:
+ * CALIBRATION. A player reported a 71 driving dunk finishing at 84 in the
+ * retail builder. This walk predicts 85 under `near_caps` and 76 under
+ * `isolated`; 84 sits one below the near-caps end, which is what a real build
+ * close to (but not at) its ceilings should do. An earlier version of this
+ * function read straight across the starting row instead, which predicts 94
+ * for the same build -- ten points out, and wrong.
  *
- *  - The table is a shifted view of one curve: `row(r)[1..4]` equals
- *    `row(r + row(r)[0])[0..3]` in 2,601 of 2,656 sequences. Re-reading at the
- *    new rating and taking column 0 gives the same answer as reading straight
- *    across the starting row.
- *  - Summing the row never overshoots the attribute's ceiling, and lands
- *    exactly on it 739 times -- which is the documented behaviour, breakers
- *    approaching the physical cap without passing it.
- *  - The double-counting reading stalls 742 sequences below the ceiling with
- *    breakers left unspent, which no sane reward design would do.
- *
- * Corroborated in the wild: driving dunk 70 reaches 94 under this reading, the
- * figure players report.
+ * The rival reading is seductive because summing a row lands exactly on the
+ * attribute's ceiling 739 times and never overshoots. That is a property of
+ * the curve, not evidence for the walk. Measured behaviour wins.
  */
 export function project(
   rules: Rules,
@@ -88,27 +85,18 @@ export function project(
   let applied = 0;
   let note: string | null = null;
 
-  const row = gainsRow(rules, scenario, attribute, rating);
-  if (row === null) {
-    return {
-      scenario,
-      steps,
-      rating,
-      applied: 0,
-      note:
-        `no measured gains from ${rating}: the table was probed at ` +
-        `${rules.capBreakers.referenceBody.height_inches} in / ` +
-        `${rules.capBreakers.referenceBody.weight_lb} lb and stops at that body's ceiling`,
-    };
-  }
-
   const limit = Math.min(count, MAX_APPLICATIONS);
   for (let application = 0; application < limit; application += 1) {
-    const gain = row[application];
+    const row = gainsRow(rules, scenario, attribute, current);
+    const gain = row ? row[application] : null;
     if (gain === null || gain === undefined) {
-      note = `only ${applied} of ${limit} breakers have a measured gain from ${rating}`;
+      note =
+        `no measured gain beyond ${applied} application(s) from ${rating}: the ` +
+        `table was probed at ${rules.capBreakers.referenceBody.height_inches} in / ` +
+        `${rules.capBreakers.referenceBody.weight_lb} lb and stops at that body's ceiling`;
       break;
     }
+    if (gain === 0) break;
     current = Math.min(current + gain, RATING_MAX);
     steps.push(current);
     applied += 1;
