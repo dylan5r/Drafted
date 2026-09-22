@@ -214,46 +214,67 @@ says it is a bracket. It does not interpolate, and it does not pick one.
 
 ### Reading the gain table
 
-Each step re-reads the table at the rating it has reached, under the next
-application index. The gain depends on **both** how high the attribute already
-is and how many breakers it has already taken, which is exactly what the
-recorded fields say: `rating` is "the starting rating before this application",
-`application` is "which of the five breakers".
+Each row is keyed by a **starting rating** and holds the gains of all five
+breakers from that rating. The sequence reads straight across the row.
 
-A consequence worth knowing: a sequence can run out of gain before all five
-land. At the reference body a driving dunk walked up from 70 reaches 85 and the
-last two breakers score zero. That looks wasteful, and it is tempting to read it
-as evidence the walk is wrong.
+It is **not** walked by advancing the column index while also re-reading at each
+new rating. That double-counts the diminishing returns and badly understates the
+result.
 
-**It is not, and this was got wrong once.** A rival reading — take the starting
-row and read straight across its five columns — predicts 94 for the same build,
-never overshoots a ceiling, lands exactly on one 739 times, and matches a
-widely repeated community claim that a 70 driving dunk "caps to 94". All of that
-is suggestive and all of it is beside the point:
+**Confirmed against the retail builder's own cap-breaker screen**, which lays
+out exactly this shape: a starting rating, five gain boxes, and the cap they sum
+to. Six attributes on that screen were free of ceiling truncation at both ends,
+and all six reproduce from this data to the point:
 
-> A player set a 71 driving dunk in the retail builder and finished at **84**.
+| attribute | screen | sum | ours |
+|---|---|---|---|
+| driving dunk | 70 `+6 +6 +5 +4 +3` → 94 | 24 | 24 |
+| free throw | 66 `+7 +5 +5 +5 +4` → 92 | 26 | 26 |
+| ball handle | 86 `+1 +1 +1 +1 +1` → 91 | 5 | 5 |
+| perimeter defense | 91 `+1 +1 +1 +1 +1` → 96 | 5 | 5 |
+| speed | 78 `+1 +1 +1 +1 +1` → 83 | 5 | 5 |
+| vertical | 75 `+3 +3 +3 +2 +2` → 88 | 13 | 13 |
 
-This walk predicts 85 at the `near_caps` end and 76 at `isolated`; a real build
-sitting just under its ceilings landing on 84 is exactly right. The rival
-reading predicts 94 — ten points out.
+Every row that does *not* match is one where a ceiling truncates the climb on
+one side and not the other. The reference body caps standing dunk at 51 and
+offensive rebound at 66, so our rows run out early there; that build's own
+ceilings cut short its mid-range, agility and three-point. None of the
+mismatches are model error.
 
-The lesson is procedural, not technical: the 739 exact ceiling landings are a
-property of the curve's shape, not evidence about how the engine walks it, and a
-community figure is not a measurement. One reading from the real builder settled
-what a lot of internal consistency could not. `capBreakers.test.ts` pins the
-observation.
+**Practical consequence.** Five breakers are worth up to **+24** on a
+low-seventies rating. A point of driving dunk bought in the builder is a point
+wasted — leave low attributes low and let the breakers climb them.
 
-**Practical consequence.** Five breakers are worth roughly +14 on a
-low-seventies rating and one or two in the nineties. Driving dunk 94 needs a
-builder base around 91, not 70 — so the attribute has to be bought, not
-grown.
+#### How this was got wrong twice
+
+Worth recording, because the failure mode is instructive.
+
+It was first implemented as the double-counting walk, inherited without
+checking. A community claim that a 70 driving dunk "caps to 94" prompted the
+switch to the correct reading — but on the strength of hearsay plus three
+suggestive internal properties (never overshoots a ceiling, lands exactly on one
+739 times, and the wrong reading strands 742 sequences with breakers unspent).
+Then a player reported a 71 dunk finishing at 84, which argued for the old
+reading, and it was switched back. That report turned out to be a partial spend,
+not a full five.
+
+The lesson is about evidence, not arithmetic: internal consistency is not
+measurement, a community figure is not measurement, and a recollection of a
+number is not measurement. **A screenshot of the builder is.** The parity table
+above is now a regression test.
 
 ### Ceilings, checked against the game
 
-One further reading from the retail builder: at 6'6" with a **6'9" wingspan**,
-block caps at 74. The ceiling formula gives exactly 74 there, and 76 at a 6'10"
-wingspan — so the formula holds, and a reported cap is a reliable way to infer
-which body a player is actually on.
+Six ceilings read off that same screen reproduce exactly at 6'6" / 261 lb /
+6'10" wingspan: defensive rebound 88, offensive rebound 82, agility 83,
+three-point 87, mid-range 92, interior defense 93.
+
+**One does not.** Block reads 74 in game; the formula gives 76. The screen shows
+a single `+4` from 70 and then four locked slots, so 74 is a hard ceiling rather
+than breakers running out. This is the only known ceiling discrepancy, and the
+likeliest explanation is that retail tuning moved it after the pre-release
+capture. Treat block ceilings at this height as two lower than computed until
+re-captured.
 
 ### What was tried, and what was found
 

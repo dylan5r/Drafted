@@ -56,22 +56,32 @@ export interface Projection {
 /**
  * Apply up to five cap breakers under one scenario.
  *
- * The gain depends on BOTH the rating you are applying at and how many
- * breakers that attribute has already taken, so each step re-reads the table
- * at the new rating under the next application index. That is what the
- * recorded fields say: `rating` is "the starting rating before this
- * application" and `application` is "which of the five breakers".
+ * The row recorded for a starting rating holds the gains of all five breakers
+ * from that rating, so the sequence reads straight across it. It is NOT walked
+ * by advancing the column index while also re-reading at each new rating --
+ * doing both double-counts the diminishing returns and badly understates the
+ * result.
  *
- * CALIBRATION. A player reported a 71 driving dunk finishing at 84 in the
- * retail builder. This walk predicts 85 under `near_caps` and 76 under
- * `isolated`; 84 sits one below the near-caps end, which is what a real build
- * close to (but not at) its ceilings should do. An earlier version of this
- * function read straight across the starting row instead, which predicts 94
- * for the same build -- ten points out, and wrong.
+ * CONFIRMED against the retail builder's own cap-breaker screen, which lays out
+ * exactly this: a starting rating, five gain boxes, and the cap they sum to.
+ * Six attributes on that screen were free of ceiling truncation at both ends,
+ * and all six reproduce here to the point:
  *
- * The rival reading is seductive because summing a row lands exactly on the
- * attribute's ceiling 739 times and never overshoots. That is a property of
- * the curve, not evidence for the walk. Measured behaviour wins.
+ *   driving dunk 70  +6+6+5+4+3 -> 94    ours sums 24
+ *   free throw   66  +7+5+5+5+4 -> 92    ours sums 26
+ *   ball handle  86  +1+1+1+1+1 -> 91    ours sums  5
+ *   perimeter    91  +1+1+1+1+1 -> 96    ours sums  5
+ *   speed        78  +1+1+1+1+1 -> 83    ours sums  5
+ *   vertical     75  +3+3+3+2+2 -> 88    ours sums 13
+ *
+ * Every row that does NOT match is one where a ceiling truncates the climb on
+ * one side and not the other -- the reference body caps standing dunk at 51 and
+ * offensive rebound at 66, so our rows run out early there, while that build's
+ * own ceilings cut short its mid-range, agility and three-point.
+ *
+ * A player earlier reported a 71 driving dunk finishing at 84, which briefly
+ * argued for the other reading. It was a partial spend, not a full five.
+ * Screens beat recollections.
  */
 export function project(
   rules: Rules,
@@ -85,15 +95,25 @@ export function project(
   let applied = 0;
   let note: string | null = null;
 
+  const row = gainsRow(rules, scenario, attribute, rating);
+  if (row === null) {
+    return {
+      scenario,
+      steps,
+      rating,
+      applied: 0,
+      note:
+        `no measured gains from ${rating}: the table was probed at ` +
+        `${rules.capBreakers.referenceBody.height_inches} in / ` +
+        `${rules.capBreakers.referenceBody.weight_lb} lb and stops at that body's ceiling`,
+    };
+  }
+
   const limit = Math.min(count, MAX_APPLICATIONS);
   for (let application = 0; application < limit; application += 1) {
-    const row = gainsRow(rules, scenario, attribute, current);
-    const gain = row ? row[application] : null;
+    const gain = row[application];
     if (gain === null || gain === undefined) {
-      note =
-        `no measured gain beyond ${applied} application(s) from ${rating}: the ` +
-        `table was probed at ${rules.capBreakers.referenceBody.height_inches} in / ` +
-        `${rules.capBreakers.referenceBody.weight_lb} lb and stops at that body's ceiling`;
+      note = `only ${applied} of ${limit} breakers have a measured gain from ${rating}`;
       break;
     }
     if (gain === 0) break;

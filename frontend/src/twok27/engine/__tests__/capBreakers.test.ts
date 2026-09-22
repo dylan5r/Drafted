@@ -72,10 +72,9 @@ describe('cap breakers', () => {
   });
 
   it('a sequence that runs out of gain simply stops, with no note', () => {
-    // Distinct from the above: the table has rows, they just score zero once
-    // the attribute has taken enough breakers. Nothing is missing, so there is
-    // nothing to explain.
-    const result = project(rules, 'near_caps', indexOf('driving_dunk'), 70);
+    // The table has rows, they just score zero once the attribute is near its
+    // ceiling. Nothing is missing, so there is nothing to explain.
+    const result = project(rules, 'near_caps', indexOf('standing_dunk'), 40);
     assert.ok(result.applied > 0 && result.applied < MAX_APPLICATIONS);
     assert.equal(result.note, null);
   });
@@ -127,20 +126,29 @@ describe('cap breakers', () => {
 describe('the ladder reading', () => {
   const DD = indexOf('driving_dunk');
 
-  it('matches the retail builder on the one build we have a reading from', () => {
-    // A 71 driving dunk finished at 84 in game. near_caps is the upper bound
-    // and lands at 85; a real build sits just under it. The reading that walks
-    // straight across the starting row predicts 94 and is wrong.
-    const high = project(rules, 'near_caps', DD, 71).rating;
-    const low = project(rules, 'isolated', DD, 71).rating;
-    assert.ok(low <= 84 && 84 <= high, `84 should sit in ${low}..${high}`);
-    assert.equal(high, 85, 'near_caps from 71 should be 85, not 94');
+  // Rows read straight off the retail builder's cap-breaker screen, for the
+  // attributes where no ceiling truncates the climb at either end. These are
+  // the strongest evidence in the project about how the table is walked.
+  const RETAIL: [string, number, number][] = [
+    ['driving_dunk', 70, 94],
+    ['free_throw', 66, 92],
+    ['ball_handle', 86, 91],
+    ['perimeter_defense', 91, 96],
+    ['speed', 78, 83],
+    ['vertical', 75, 88],
+  ];
+
+  it('reproduces the retail cap-breaker screen', () => {
+    for (const [name, from, to] of RETAIL) {
+      const got = project(rules, 'near_caps', indexOf(name), from).rating;
+      assert.equal(got, to, `${name} ${from} -> ${got}, the builder says ${to}`);
+    }
   });
 
-  it('stops rather than applying a breaker the table scores at zero', () => {
+  it('spends every breaker the table scores above zero', () => {
     const result = project(rules, 'near_caps', DD, 70);
-    assert.equal(result.rating, 85);
-    assert.ok(result.applied < MAX_APPLICATIONS, 'the last breakers score zero here');
+    assert.equal(result.applied, MAX_APPLICATIONS);
+    assert.equal(result.steps.length, MAX_APPLICATIONS + 1);
   });
 
   it('never carries an attribute past the body ceiling it was measured at', () => {
